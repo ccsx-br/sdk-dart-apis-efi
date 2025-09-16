@@ -4,16 +4,17 @@ version: 1.0.6
 homepage: https://github.com/efipay/sdk-dart-apis-efi
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
-  flutter: ">=1.20.0"
+  sdk: ">=2.17.0 <3.0.0"
 
 dependencies:
-  encrypt: ^5.0.0
-  pointycastle: ^3.2.0
-  flutter:
-    sdk: flutter
+  dio: ^5.0.0
+  encrypt: ^5.0.1
+  pointycastle: ^3.6.2
+  json_annotation: ^4.8.0
+  http: ^0.13.5
+  crypto: ^3.0.2
 
 dev_dependencies:
   test: ^1.17.1
-
-flutter:
+  build_runner: ^2.3.0
+  json_serializable: ^6.5.0

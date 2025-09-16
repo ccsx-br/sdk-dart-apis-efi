@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'config.dart';
 import 'exception/authorization_exception.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
 /// This class is responsible to create an HttpClient Object, generate the
 /// request body and send it to a given endpoint. The send method return a
@@ -72,18 +71,15 @@ class Request {
     }
   }
 
-  void _addCerts() async {
+    void _addCerts() async {
     SecurityContext context = SecurityContext.defaultContext;
-    final List<int> certificateChainBytes =
-        (await rootBundle.load(this._config.conf['certificate']))
-            .buffer
-            .asInt8List();
-    context.useCertificateChainBytes(certificateChainBytes);
-    final List<int> keyBytes =
-        (await rootBundle.load(this._config.conf['certificate']))
-            .buffer
-            .asInt8List();
-    context.usePrivateKeyBytes(keyBytes);
+    
+    final certificateFile = File(this._config.conf['certificate']);
+    final certificateBytes = await certificateFile.readAsBytes();
+    
+    context.useCertificateChainBytes(certificateBytes);
+    context.usePrivateKeyBytes(certificateBytes);
+    
     this._client = new HttpClient(context: context);
   }
 }

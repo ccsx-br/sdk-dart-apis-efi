@@ -4,11 +4,11 @@ import '../../credentials.dart';
 void main() async {
   credentials.remove('certificate');
   EfiPay efi = EfiPay(credentials);
-  dynamic response = await oneStepSubscriptionLink(efi, 95511);
+  dynamic response = await createOneStepSubscriptionLink(efi, 95511);
   print(response);
 }
 
-dynamic oneStepSubscriptionLink(EfiPay efi, int planId) async {
+dynamic createOneStepSubscriptionLink(EfiPay efi, int planId) async {
   Map<String, dynamic> params = {'id': planId};
   dynamic body = {
     'items': [
@@ -20,5 +20,5 @@ dynamic oneStepSubscriptionLink(EfiPay efi, int planId) async {
       'request_delivery_address': false
     }
   };
-  return await efi.call('oneStepSubscriptionLink', params: params, body: body);
+  return await efi.call('createOneStepSubscriptionLink', params: params, body: body);
 }
