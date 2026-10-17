@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'config.dart';
+import 'constants.dart';
 import 'request.dart';
 
 /// This class is used to create an authenticator Object, responsible to send
@@ -29,11 +30,20 @@ class Auth {
       throw Exception('Client id or secret not found');
     }
 
-    Map endpoints = {'route': '/authorize', 'method': 'post'};
-
-    if (this._config.conf.containsKey('certificate') ||
-        this._config.conf.containsKey('certificateBase64'))
-      endpoints = {'route': '/oauth/token', 'method': 'post'};
+    // The token route follows the API family the current request targets
+    // (`baseUri` was resolved by `Config.getEndpoint` for it): the
+    // cobranças API authorizes on `/authorize`, the Pix/Open Finance/
+    // Pagamentos hosts on `/oauth/token`. The certificate only enables
+    // mTLS on the transport — it does not select the route.
+    final defaultUri =
+        CONSTANTS['DEFAULT']?['URL'][this._config.conf['sandbox'] == true
+            ? 'sandbox'
+            : 'production'];
+    final isDefaultApi = this._config.conf['baseUri'] == defaultUri;
+    Map endpoints = {
+      'route': isDefaultApi ? '/authorize' : '/oauth/token',
+      'method': 'post',
+    };
 
     dynamic requestOptions = {
       'headers': {
