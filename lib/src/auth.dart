@@ -12,53 +12,63 @@ class Auth {
   String _clientSecret = '';
   String _accessToken = '';
   DateTime? _expires;
-  String _pixCert = '';
 
   Auth() {
-    if (!this._config.conf.containsKey('clientId') ||
-        !this._config.conf.containsKey('clientSecret'))
-      throw new Exception('Client id or secret not found');
-
     this._request = new Request();
 
-    this._clientId = this._config.conf['clientId'];
+    this._clientId = this._config.conf['clientId']?.toString() ?? '';
 
-    this._pixCert = this._config.conf['certificate'] != null
-        ? this._config.conf['certificate']
-        : '';
-
-    this._clientSecret = this._config.conf['clientSecret'];
+    this._clientSecret = this._config.conf['clientSecret']?.toString() ?? '';
   }
 
   authorize() async {
+    // The credentials are only required here — endpoints that do not go
+    // through this authenticator (e.g. the public `paymentToken`
+    // tokenization, authorized by `account-code`) work without them.
+    if (this._clientId.isEmpty || this._clientSecret.isEmpty) {
+      throw Exception('Client id or secret not found');
+    }
+
     Map endpoints = {'route': '/authorize', 'method': 'post'};
 
-    if (this._config.conf.containsKey('certificate'))
+    if (this._config.conf.containsKey('certificate') ||
+        this._config.conf.containsKey('certificateBase64'))
       endpoints = {'route': '/oauth/token', 'method': 'post'};
 
     dynamic requestOptions = {
       'headers': {
-        'Authorization': "Basic " +
+        'Authorization':
+            "Basic " +
             base64
                 .encode(utf8.encode(this._clientId + ":" + this._clientSecret))
-                .toString()
+                .toString(),
       },
       'body': {'grant_type': 'client_credentials'},
-      'timeout': this._config.conf['timeout']
+      'timeout': this._config.conf['timeout'],
     };
 
     if (!this._config.conf.containsKey('headers'))
       this._config.conf['headers'] = {};
 
-    dynamic response = await this
-        ._request
-        ?.send(endpoints['method'], endpoints['route'], requestOptions);
+    dynamic response = await this._request?.send(
+      endpoints['method'],
+      endpoints['route'],
+      requestOptions,
+    );
 
     this._accessToken = response['access_token'];
 
+    // The OAuth payload answers `expire_at` (epoch seconds) on the Pix
+    // endpoints and `expires_in` (seconds from now) elsewhere — accept
+    // both so the token is not re-minted on every call.
     if (response['expire_at'] != null) {
-      this._expires =
-          DateTime.fromMillisecondsSinceEpoch(int.parse(response['expire_at']));
+      this._expires = DateTime.fromMillisecondsSinceEpoch(
+        int.parse(response['expire_at'].toString()) * 1000,
+      );
+    } else if (response['expires_in'] != null) {
+      this._expires = DateTime.now().add(
+        Duration(seconds: int.parse(response['expires_in'].toString())),
+      );
     }
 
     return;

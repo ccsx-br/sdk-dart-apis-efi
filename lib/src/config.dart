@@ -17,11 +17,13 @@ class Config {
   Config._internal();
 
   set(Map options) {
-    this.conf['sandbox'] =
-        options.containsKey('sandbox') ? options['sandbox'] : false;
+    this.conf['sandbox'] = options.containsKey('sandbox')
+        ? options['sandbox']
+        : false;
 
-    this.conf['debug'] =
-        options.containsKey('debug') ? options['debug'] : false;
+    this.conf['debug'] = options.containsKey('debug')
+        ? options['debug']
+        : false;
 
     this.conf['clientId'] = options['client_id'];
 
@@ -30,11 +32,15 @@ class Config {
 
     this.conf['clientSecret'] = options['client_secret'];
 
-    this.conf['timeout'] =
-        options.containsKey('timeout') ? options['timeout'] : 30.0;
+    this.conf['timeout'] = options.containsKey('timeout')
+        ? options['timeout']
+        : 30.0;
 
     if (options.containsKey('certificate'))
       this.conf['certificate'] = options['certificate'];
+
+    if (options.containsKey('certificate_base64'))
+      this.conf['certificateBase64'] = options['certificate_base64'];
 
     if (options.containsKey('private_key'))
       this.conf['privateKey'] = options['private_key'];
