@@ -9,19 +9,26 @@ import 'exception/authorization_exception.dart';
 class Request {
   HttpClient? _client;
   final Config _config = Config();
-  bool _initialized = false;
+  Future<void>? _initFuture;
 
   /// Lazily builds the [HttpClient] on the first [send] — including the
   /// mTLS `SecurityContext` when a `certificate` (path to a PEM bundle
   /// with the chain and the private key) or `certificate_base64` (the
   /// same PEM encoded in base64, materialized to a temporary file so
-  /// `SecurityContext` can read it) is configured. Awaiting it here
-  /// removes the race the previous constructor-based initialization
-  /// created — the async certificate load could still be in flight when
-  /// the first mTLS request fired.
-  Future<void> _ensureInitialized() async {
-    if (_initialized) return;
-    _initialized = true;
+  /// `SecurityContext` can read it) is configured.
+  ///
+  /// Concurrent sends share ONE in-flight future — a caller that arrives
+  /// mid-load awaits the same future instead of seeing a null client —
+  /// and a failed load clears it so the next send retries instead of
+  /// staying permanently uninitialized.
+  Future<void> _ensureInitialized() {
+    return _initFuture ??= _doInit().catchError((e) {
+      _initFuture = null;
+      throw e;
+    });
+  }
+
+  Future<void> _doInit() async {
     if (_config.conf.containsKey('certificate') ||
         _config.conf.containsKey('certificateBase64')) {
       await _addCerts();
@@ -42,8 +49,8 @@ class Request {
 
     if (requestOptions.containsKey('headers'))
       requestOptions['headers'].keys.forEach(
-        (k) => request.headers.add(k, requestOptions['headers'][k]),
-      );
+            (k) => request.headers.add(k, requestOptions['headers'][k]),
+          );
 
     if (_config.conf.containsKey('headers'))
       _config.conf['headers'].keys.forEach(
@@ -112,12 +119,16 @@ class Request {
   }
 
   Future<void> _addCerts() async {
-    SecurityContext context = SecurityContext.defaultContext;
+    // A dedicated context — `SecurityContext.defaultContext` is shared
+    // process-wide: installing the client cert there would offer it to
+    // any unrelated server that requests client authentication.
+    SecurityContext context = SecurityContext(withTrustedRoots: true);
 
-    // `certificate` points to a PEM file; `certificate_base64` carries the
-    // same PEM bundle encoded — handy for secrets stored as a single
-    // base64 string (Cloud Run/CI) — it is materialized on a temporary
-    // file so the SecurityContext can load the chain and the key.
+    // `certificate` points to a PEM file (chain + private key — the
+    // dart:io SecurityContext does not read .p12; convert it first);
+    // `certificate_base64` carries the same PEM bundle encoded — handy
+    // for secrets stored as a single base64 string (Cloud Run/CI) — it
+    // is materialized on a temporary file only long enough to be read.
     String? certificatePath = _config.conf['certificate'];
     String? materializedPath;
     try {
@@ -137,14 +148,16 @@ class Request {
       context.useCertificateChainBytes(certificateBytes);
       context.usePrivateKeyBytes(certificateBytes);
     } catch (e) {
-      // A failed materialization must not leave a half-written PEM
-      // behind — clean it up so the next attempt writes it again.
+      rethrow;
+    } finally {
+      // The PEM contains the private key — never leave it on disk,
+      // neither on failure nor after a successful load (the bytes are
+      // already in the SecurityContext).
       if (materializedPath != null) {
         try {
           await File(materializedPath).delete();
         } catch (_) {}
       }
-      rethrow;
     }
 
     _client = HttpClient(context: context);

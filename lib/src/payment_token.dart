@@ -46,9 +46,9 @@ class PaymentToken {
   static Future<dynamic> getKey(dynamic config) async {
     String url = config["sandbox"]
         ? 'https://sandbox.gerencianet.com.br/v1/pubkey?code=' +
-              config["accountId"]
+            config["accountId"]
         : 'https://api.gerencianet.com.br/v1/pubkey?code=' +
-              config["accountId"];
+            config["accountId"];
     HttpClient client = new HttpClient();
     HttpClientRequest request = await client.openUrl("get", Uri.parse(url));
     HttpClientResponse response = await request.close();
@@ -58,7 +58,9 @@ class PaymentToken {
 
   static Future<String> encriptData(String public, String text) async {
     final publicKey = CryptoUtils.rsaPublicKeyFromPem(public);
-    final engine = RSAEngine()
+    // PKCS#1 v1.5 padding — a raw RSAEngine emits unpadded blocks the
+    // tokenizer cannot decrypt.
+    final engine = PKCS1Encoding(RSAEngine())
       ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey));
     final encrypted = engine.process(Uint8List.fromList(utf8.encode(text)));
     return base64.encode(encrypted);

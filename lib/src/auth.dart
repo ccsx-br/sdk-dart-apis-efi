@@ -11,8 +11,12 @@ class Auth {
   Request? _request;
   String _clientId = '';
   String _clientSecret = '';
-  String _accessToken = '';
-  DateTime? _expires;
+  // One token per API family — the cobranças OAuth token is not valid
+  // on the Pix/Open Finance/Pagamentos hosts (and vice-versa), so
+  // caching a single token makes every cross-family call pay a 401
+  // retry. Keyed by the OAuth route (`/authorize` vs `/oauth/token`).
+  final Map<String, String> _accessTokens = {};
+  final Map<String, DateTime?> _expiresAt = {};
 
   Auth() {
     this._request = new Request();
@@ -35,20 +39,11 @@ class Auth {
     // cobranças API authorizes on `/authorize`, the Pix/Open Finance/
     // Pagamentos hosts on `/oauth/token`. The certificate only enables
     // mTLS on the transport — it does not select the route.
-    final defaultUri =
-        CONSTANTS['DEFAULT']?['URL'][this._config.conf['sandbox'] == true
-            ? 'sandbox'
-            : 'production'];
-    final isDefaultApi = this._config.conf['baseUri'] == defaultUri;
-    Map endpoints = {
-      'route': isDefaultApi ? '/authorize' : '/oauth/token',
-      'method': 'post',
-    };
+    Map endpoints = {'route': _authRoute(), 'method': 'post'};
 
     dynamic requestOptions = {
       'headers': {
-        'Authorization':
-            "Basic " +
+        'Authorization': "Basic " +
             base64
                 .encode(utf8.encode(this._clientId + ":" + this._clientSecret))
                 .toString(),
@@ -61,22 +56,23 @@ class Auth {
       this._config.conf['headers'] = {};
 
     dynamic response = await this._request?.send(
-      endpoints['method'],
-      endpoints['route'],
-      requestOptions,
-    );
+          endpoints['method'],
+          endpoints['route'],
+          requestOptions,
+        );
 
-    this._accessToken = response['access_token'];
+    final route = _authRoute();
+    this._accessTokens[route] = response['access_token'];
 
     // The OAuth payload answers `expire_at` (epoch seconds) on the Pix
     // endpoints and `expires_in` (seconds from now) elsewhere — accept
     // both so the token is not re-minted on every call.
     if (response['expire_at'] != null) {
-      this._expires = DateTime.fromMillisecondsSinceEpoch(
+      this._expiresAt[route] = DateTime.fromMillisecondsSinceEpoch(
         int.parse(response['expire_at'].toString()) * 1000,
       );
     } else if (response['expires_in'] != null) {
-      this._expires = DateTime.now().add(
+      this._expiresAt[route] = DateTime.now().add(
         Duration(seconds: int.parse(response['expires_in'].toString())),
       );
     }
@@ -84,11 +80,22 @@ class Auth {
     return;
   }
 
+  /// The OAuth route for the API family the pending request targets —
+  /// `/authorize` for the cobranças DEFAULT host, `/oauth/token` for the
+  /// Pix/Open Finance/Pagamentos hosts.
+  String _authRoute() {
+    final defaultUri = CONSTANTS['DEFAULT']?['URL']
+        [this._config.conf['sandbox'] == true ? 'sandbox' : 'production'];
+    return this._config.conf['baseUri'] == defaultUri
+        ? '/authorize'
+        : '/oauth/token';
+  }
+
   DateTime? getExpires() {
-    return this._expires;
+    return this._expiresAt[_authRoute()];
   }
 
   String getAccessToken() {
-    return this._accessToken;
+    return this._accessTokens[_authRoute()] ?? '';
   }
 }
