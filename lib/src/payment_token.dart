@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:encrypt/encrypt.dart';
-import 'package:pointycastle/asymmetric/api.dart';
+import 'dart:typed_data';
+import 'package:basic_utils/basic_utils.dart';
+import 'package:pointycastle/export.dart';
 
 /// This class is responsible for carrying out requests that generate a valid Payment Token
 class PaymentToken {
@@ -56,10 +57,12 @@ class PaymentToken {
   }
 
   static Future<String> encriptData(String public, String text) async {
-    final parser = RSAKeyParser();
-    final publicKey = parser.parse(public) as RSAPublicKey;
-    Encrypter encrypter = Encrypter(RSA(publicKey: publicKey));
-    Encrypted encrypted = encrypter.encrypt(text);
-    return encrypted.base64;
+    final publicKey = CryptoUtils.rsaPublicKeyFromPem(public);
+    // PKCS#1 v1.5 padding — a raw RSAEngine emits unpadded blocks the
+    // tokenizer cannot decrypt.
+    final engine = PKCS1Encoding(RSAEngine())
+      ..init(true, PublicKeyParameter<RSAPublicKey>(publicKey));
+    final encrypted = engine.process(Uint8List.fromList(utf8.encode(text)));
+    return base64.encode(encrypted);
   }
 }

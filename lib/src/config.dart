@@ -25,24 +25,21 @@ class Config {
 
     this.conf['clientId'] = options['client_id'];
 
-    if (options.containsKey('account_id'))
-      conf['accountId'] = options['account_id'];
-
     this.conf['clientSecret'] = options['client_secret'];
 
     this.conf['timeout'] =
         options.containsKey('timeout') ? options['timeout'] : 30.0;
 
-    if (options.containsKey('certificate'))
-      this.conf['certificate'] = options['certificate'];
-
-    if (options.containsKey('private_key'))
-      this.conf['privateKey'] = options['private_key'];
-
-    if (options.containsKey('partner_token'))
-      this.conf['partnerToken'] = options['partner_token'];
-
-    if (options.containsKey('headers')) conf['headers'] = options['headers'];
+    // Optional settings are CLEARED when absent — the singleton `conf`
+    // is shared, so a later client that omits them must not inherit a
+    // previous client's certificate, headers or account code.
+    conf['accountId'] = options['account_id'];
+    conf['certificate'] = options['certificate'];
+    conf['certificateBase64'] = options['certificate_base64'];
+    conf['privateKey'] = options['private_key'];
+    conf['partnerToken'] = options['partner_token'];
+    conf['headers'] = options['headers'];
+    conf.removeWhere((_, v) => v == null);
   }
 
   getEndpoint(endpointName) {

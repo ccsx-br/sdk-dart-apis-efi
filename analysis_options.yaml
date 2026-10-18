@@ -1,0 +1,7 @@
+analyzer:
+  exclude:
+    # The examples require a local `credentials.dart` (never committed —
+    # it holds real Efi credentials) and carry pre-existing upstream
+    # import/syntax issues. Excluding the folder keeps `dart analyze`
+    # scoped to the shipped library.
+    - example/**

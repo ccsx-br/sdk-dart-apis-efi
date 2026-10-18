@@ -14,7 +14,17 @@ class ApiRequest {
 
   ApiRequest() {
     this._request = new Request();
-    this._auth = new Auth();
+    // `Auth` is built lazily (see [_requireAuth]) — endpoints that do not
+    // need OAuth credentials (the public `paymentToken` tokenization
+    // runs on `account-code` alone) must work in a process that never
+    // configured `client_id`/`client_secret`, e.g. a Flutter app.
+  }
+
+  /// The authenticator — created on the first authenticated call so the
+  /// credentials check only fires when an endpoint actually needs it.
+  Auth _requireAuth() {
+    this._auth ??= new Auth();
+    return this._auth!;
   }
 
   Future<dynamic> send(
@@ -23,27 +33,32 @@ class ApiRequest {
     Map<String, dynamic> requestOptions,
   ) async {
     try {
-      DateTime? expireDate = this._auth?.getExpires();
+      final auth = _requireAuth();
+      DateTime? expireDate = auth.getExpires();
 
       if (expireDate == null || expireDate.compareTo(new DateTime.now()) <= 0)
-        await this._auth?.authorize();
+        await auth.authorize();
 
       requestOptions['headers'] = {
-        'Authorization': 'Bearer ${this._auth?.getAccessToken()}'
+        'Authorization': 'Bearer ${auth.getAccessToken()}',
       };
 
       requestOptions['timeout'] = this._config.conf.containsKey('timeout')
           ? double.parse(this._config.conf['timeout'].toString())
           : 30.0;
 
-      dynamic response =
-          await this._request?.send(method, route, requestOptions);
+      dynamic response = await this._request?.send(
+        method,
+        route,
+        requestOptions,
+      );
 
       return response;
     } on AuthorizationException {
-      await this._auth?.authorize();
+      final auth = _requireAuth();
+      await auth.authorize();
       requestOptions['headers'] = {
-        'Authorization': 'Bearer ${this._auth?.getAccessToken()}'
+        'Authorization': 'Bearer ${auth.getAccessToken()}',
       };
       return this._request?.send(method, route, requestOptions);
     }
